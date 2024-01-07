@@ -1,27 +1,35 @@
-use actix_web::{get, web, Result};
+use actix_web::{error, web, App, HttpResponse, HttpServer, Responder};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
 struct Info {
-    user_id: u32,
-    friend: String,
+    username: String,
 }
 
-/// extract path info using serde
-#[get("/users/{user_id}/{friend}")] // <- define path parameters
-async fn index(info: web::Path<Info>) -> Result<String> {
-    Ok(format!(
-        "Welcome {}, user_id {}!",
-        info.friend, info.user_id
-    ))
+/// deserialize `Info` from request's body, max payload size if 4Kb
+async fn index(info: web::Json<Info>) -> impl Responder {
+    format!("Welcome {}!", info.username)
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    use actix_web::{App, HttpServer};
+    HttpServer::new(|| {
+        let json_config = web::JsonConfig::default()
+            .limit(4096)
+            .error_handler(|err, _req| {
+                // create custom error response
+                error::InternalError::from_response(err, HttpResponse::Conflict().finish())
+                    .into()
+            });
 
-    HttpServer::new(|| App::new().service(index))
-        .bind(("127.0.0.1", 8080))?
-        .run()
-        .await
+        App::new().service(
+            web::resource("/")
+                // change json extractor configuration
+                .app_data(json_config)
+                .route(web::post().to(index))   
+        )
+    })
+    .bind(("127.0.0.1", 8080))?
+    .run()
+    .await
 }
