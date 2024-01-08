@@ -1,20 +1,16 @@
-use actix_web::{get, App, Result, HttpServer, HttpRequest};
+use actix_web::{get, web, App, HttpServer, Result};
 
-#[get("/a/{v1}/{v2}/")]
-async fn index(req: HttpRequest) -> Result<String> {
-    let v1: u8 = req.match_info().get("v1").unwrap().parse().unwrap();
-    let v2: u8 = req.match_info().query("v2").parse().unwrap();
-    let (v3, v4): (u8, u8) = req.match_info().load().unwrap();
-    Ok(format!("Values {} {} {} {}", v1, v2, v3, v4))
+#[get("/{username}/{id}/index.html")]
+async fn index(info: web::Path<(String, u32)>) -> Result<String> {
+    let info = info.into_inner();
+
+    Ok(format!("Welcome {}! id: {}", info.0, info.1))
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| {
-        App::new()
-            .service(index)
-    })
-    .bind(("127.0.0.1", 8080))?
-    .run()
-    .await
+    HttpServer::new(|| App::new().service(index))
+        .bind(("127.0.0.1", 8080))?
+        .run()
+        .await
 }
