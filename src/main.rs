@@ -1,19 +1,37 @@
-use actix_web::{get, web, App, Error, HttpResponse, HttpServer};
-use futures::{future::ok, stream::once};
+use actix_web::{error, get, middleware::Logger, App, HttpServer, Result};
+use derive_more::{Display, Error};
+use log::info;
 
-#[get("/stream")]
-async fn stream() -> HttpResponse {
-    let body = once(ok::<_, Error>(web::Bytes::from_static(b"test")));
-
-    HttpResponse::Ok()
-        .content_type("application/json")
-        .streaming(body)
+#[derive(Debug, Display, Error)]
+#[display(fmt = "my error: {}", name)]
+pub struct MyError {
+    name: &'static str,
 }
 
+impl error::ResponseError for MyError {}
+
+#[get("/")]
+async fn index() -> Result<&'static str, MyError> {
+    let err = MyError { name: "test error" };
+    info!("{}", err);
+    Err(err)
+}
+
+#[rustfmt::skip]
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| App::new().service(stream))
-        .bind(("127.0.0.1", 8080))?
-        .run()
-        .await
+    std::env::set_var("RUST_LOG", "info");
+    std::env::set_var("RUST_BACKTRACE", "1");
+    env_logger::init();
+
+    HttpServer::new(|| {
+        let logger = Logger::default();
+
+        App::new()
+            .wrap(logger)
+            .service(index)
+    })
+    .bind(("127.0.0.1", 8080))?
+    .run()
+    .await
 }
