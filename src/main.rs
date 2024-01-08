@@ -1,10 +1,14 @@
 use actix_web::{get, web, App, HttpServer, Result};
+use serde::Deserialize;
 
-#[get("/{username}/{id}/index.html")]
-async fn index(info: web::Path<(String, u32)>) -> Result<String> {
-    let info = info.into_inner();
+#[derive(Deserialize)]
+struct Info {
+    username: String,
+}
 
-    Ok(format!("Welcome {}! id: {}", info.0, info.1))
+#[get("/{username}/index.html")]
+async fn index(info: web::Path<Info>) -> Result<String> {
+    Ok(format!("Welcome {}", info.username))
 }
 
 #[actix_web::main]
