@@ -1,34 +1,17 @@
-use actix_web::{error, get, middleware::Logger, App, HttpServer, Result};
-use derive_more::{Display, Error};
-use log::info;
+use actix_web::{get, App, Result, HttpServer, HttpRequest};
 
-#[derive(Debug, Display, Error)]
-#[display(fmt = "my error: {}", name)]
-pub struct MyError {
-    name: &'static str,
+#[get("/a/{v1}/{v2}/")]
+async fn index(req: HttpRequest) -> Result<String> {
+    let v1: u8 = req.match_info().get("v1").unwrap().parse().unwrap();
+    let v2: u8 = req.match_info().query("v2").parse().unwrap();
+    let (v3, v4): (u8, u8) = req.match_info().load().unwrap();
+    Ok(format!("Values {} {} {} {}", v1, v2, v3, v4))
 }
 
-impl error::ResponseError for MyError {}
-
-#[get("/")]
-async fn index() -> Result<&'static str, MyError> {
-    let err = MyError { name: "test error" };
-    info!("{}", err);
-    Err(err)
-}
-
-#[rustfmt::skip]
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    std::env::set_var("RUST_LOG", "info");
-    std::env::set_var("RUST_BACKTRACE", "1");
-    env_logger::init();
-
     HttpServer::new(|| {
-        let logger = Logger::default();
-
         App::new()
-            .wrap(logger)
             .service(index)
     })
     .bind(("127.0.0.1", 8080))?
