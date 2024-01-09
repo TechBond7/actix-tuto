@@ -1,18 +1,17 @@
-use actix_session::{storage::CookieSessionStore, Session, SessionMiddleware};
-use actix_web::{cookie::Key, web, App, Error, HttpResponse, HttpServer};
+use actix_web::middleware::{ErrorHandlerResponse, ErrorHandlers};
+use actix_web::{
+    dev,
+    http::{header, StatusCode},
+    web, App, HttpResponse, HttpServer, Result,
+};
 
-async fn index(session: Session) -> Result<HttpResponse, Error> {
-    // access session data
-    if let Some(count) = session.get::<i32>("counter")? {
-        session.insert("counter", count + 1)?;
-    } else {
-        session.insert("counter", 1)?;
-    }
+fn add_error_header<B>(mut res: dev::ServiceResponse<B>) -> Result<ErrorHandlerResponse<B>> {
+    res.response_mut().headers_mut().insert(
+        header::CONTENT_TYPE,
+        header::HeaderValue::from_static("Error"),
+    );
 
-    Ok(HttpResponse::Ok().body(format!(
-        "Count is {:?}!",
-        session.get::<i32>("counter")?.unwrap()
-    )))
+    Ok(ErrorHandlerResponse::Response(res.map_into_left_body()))
 }
 
 #[actix_web::main]
@@ -20,12 +19,10 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
         App::new()
             .wrap(
-                // create cookie based session middleware
-                SessionMiddleware::builder(CookieSessionStore::default(), Key::from(&[0; 64]))
-                    .cookie_secure(false)
-                    .build(),
+                ErrorHandlers::new()
+                    .handler(StatusCode::INTERNAL_SERVER_ERROR, add_error_header),
             )
-            .service(web::resource("/").to(index))
+            .service(web::resource("/").route(web::get().to(HttpResponse::InternalServerError)))
     })
     .bind(("127.0.0.1", 8080))?
     .run()
