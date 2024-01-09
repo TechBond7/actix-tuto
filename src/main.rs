@@ -1,19 +1,24 @@
-use actix_web::{web, App, HttpServer, Result};
-use serde::Deserialize;
+use actix_web::{get, web, Responder, Result};
+use serde::Serialize;
 
-#[derive(Deserialize)]
-struct Info {
-    username: String,
+#[derive(Serialize)]
+struct MyObj {
+    name: String,
 }
 
-/// extract `Info` using serde
-async fn index(info: web::Json<Info>) -> Result<String> {
-    Ok(format!("Welcome {}!", info.username))
+#[get("/a/{name}")]
+async fn index(name: web::Path<String>) -> Result<impl Responder> {
+    let obj = MyObj {
+        name: name.to_string(),
+    };
+    Ok(web::Json(obj))
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| App::new().route("/", web::post().to(index)))
+    use actix_web::{App, HttpServer};
+
+    HttpServer::new(|| App::new().service(index))
         .bind(("127.0.0.1", 8080))?
         .run()
         .await
