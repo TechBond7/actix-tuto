@@ -1,36 +1,38 @@
-use actix::{Actor, StreamHandler};
-use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
-use actix_web_actors::ws;
+use actix::prelude::*;
 
-/// Define HTTP actor
-struct MyWs;
-
-impl Actor for MyWs {
-    type Context = ws::WebsocketContext<Self>;
+struct MyActor {
+    count: usize,
 }
 
-/// Handler for ws::Message message
-impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWs {
-    fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
-        match msg {
-            Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
-            Ok(ws::Message::Text(text)) => ctx.text(text),
-            Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
-            _ => (),
-        }
+impl Actor for MyActor {
+    type Context = Context<Self>;
+}
+
+#[derive(Message)]
+#[rtype(result = "usize")]
+struct Ping(usize);
+
+impl Handler<Ping> for MyActor {
+    type Result = usize;
+
+    fn handle(&mut self, msg: Ping, _ctx: &mut Context<Self>) -> Self::Result {
+        self.count += msg.0;
+
+        self.count
     }
 }
 
-async fn index(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
-    let resp = ws::start(MyWs {}, &req, stream);
-    println!("{:?}", resp);
-    resp
-}
+#[actix_rt::main]
+async fn main() {
+    // start new actor
+    let addr = MyActor { count: 10 }.start();
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| App::new().route("/ws/", web::get().to(index)))
-        .bind(("127.0.0.1", 8080))?
-        .run()
-        .await
+    // send message and get future for result
+    let res = addr.send(Ping(10)).await;
+
+    // handle() returns tokio handle
+    println!("RESULT: {}", res.unwrap() == 20);
+
+    // stop system and exit
+    System::current().stop()
 }
