@@ -1,9 +1,29 @@
+use actix::dev::{MessageResponse, OneshotSender};
 use actix::prelude::*;
 
-/// Define message
 #[derive(Message)]
-#[rtype(result = "Result<bool, std::io::Error>")]
-struct Ping;
+#[rtype(result = "Responses")]
+enum Messages {
+    Ping,
+    Pong,
+}
+
+enum Responses {
+    GotPing,
+    GotPong,
+}
+
+impl<A, M> MessageResponse<A, M> for Responses
+where
+    A: Actor,
+    M: Message<Result = Responses>,
+{
+    fn handle(self, _ctx: &mut A::Context, tx: Option<OneshotSender<M::Result>>) {
+        if let Some(tx) = tx {
+            let _ = tx.send(self);
+        }
+    }
+}
 
 // Define actor
 struct MyActor;
@@ -13,22 +33,23 @@ impl Actor for MyActor {
     type Context = Context<Self>;
 
     fn started(&mut self, _ctx: &mut Context<Self>) {
-       println!("Actor is alive");
+        println!("Actor is alive");
     }
 
     fn stopped(&mut self, _ctx: &mut Context<Self>) {
-       println!("Actor is stopped");
+        println!("Actor is stopped");
     }
 }
 
-/// Define handler for `Ping` message
-impl Handler<Ping> for MyActor {
-    type Result = Result<bool, std::io::Error>;
+/// Define handler for `Messages` enum
+impl Handler<Messages> for MyActor {
+    type Result = Responses;
 
-    fn handle(&mut self, _msg: Ping, _ctx: &mut Context<Self>) -> Self::Result {
-        println!("Ping received");
-
-        Ok(true)
+    fn handle(&mut self, msg: Messages, _ctx: &mut Context<Self>) -> Self::Result {
+        match msg {
+            Messages::Ping => Responses::GotPing,
+            Messages::Pong => Responses::GotPong,
+        }
     }
 }
 
@@ -39,10 +60,22 @@ async fn main() {
 
     // Send Ping message.
     // send() message returns Future object, that resolves to message result
-    let result = addr.send(Ping).await;
+    let ping_future = addr.send(Messages::Ping).await;
+    let pong_future = addr.send(Messages::Pong).await;
 
-    match result {
-        Ok(res) => println!("Got result: {}", res.unwrap()),
-        Err(err) => println!("Got error: {}", err),
+    match pong_future {
+        Ok(res) => match res {
+            Responses::GotPing => println!("Ping received"),
+            Responses::GotPong => println!("Pong received"),
+        },
+        Err(e) => println!("Actor is probably dead: {}", e),
+    }
+
+    match ping_future {
+        Ok(res) => match res {
+            Responses::GotPing => println!("Ping received"),
+            Responses::GotPong => println!("Pong received"),
+        },
+        Err(e) => println!("Actor is probably dead: {}", e),
     }
 }
