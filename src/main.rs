@@ -1,38 +1,48 @@
 use actix::prelude::*;
 
-struct MyActor {
-    count: usize,
-}
+/// Define message
+#[derive(Message)]
+#[rtype(result = "Result<bool, std::io::Error>")]
+struct Ping;
 
+// Define actor
+struct MyActor;
+
+// Provide Actor implementation for our actor
 impl Actor for MyActor {
     type Context = Context<Self>;
+
+    fn started(&mut self, _ctx: &mut Context<Self>) {
+       println!("Actor is alive");
+    }
+
+    fn stopped(&mut self, _ctx: &mut Context<Self>) {
+       println!("Actor is stopped");
+    }
 }
 
-#[derive(Message)]
-#[rtype(result = "usize")]
-struct Ping(usize);
-
+/// Define handler for `Ping` message
 impl Handler<Ping> for MyActor {
-    type Result = usize;
+    type Result = Result<bool, std::io::Error>;
 
-    fn handle(&mut self, msg: Ping, _ctx: &mut Context<Self>) -> Self::Result {
-        self.count += msg.0;
+    fn handle(&mut self, _msg: Ping, _ctx: &mut Context<Self>) -> Self::Result {
+        println!("Ping received");
 
-        self.count
+        Ok(true)
     }
 }
 
 #[actix_rt::main]
 async fn main() {
-    // start new actor
-    let addr = MyActor { count: 10 }.start();
+    // Start MyActor in current thread
+    let addr = MyActor.start();
 
-    // send message and get future for result
-    let res = addr.send(Ping(10)).await;
+    // Send Ping message.
+    // send() message returns Future object, that resolves to message result
+    let result = addr.send(Ping).await;
 
-    // handle() returns tokio handle
-    println!("RESULT: {}", res.unwrap() == 20);
-
-    // stop system and exit
-    System::current().stop()
+    match result {
+        Ok(res) => println!("Got result: {}", res.unwrap()),
+        Err(err) => println!("Got error: {}", err),
+    }
 }
